@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ساعت هفتگی من</title>
+<style>
+  :root {
+    --color-free:   #EDEBE3;
+    --color-bg:     #FFFFFF;
+    --color-card:   #FAF9F6;
+    --color-border: #DAD8CF;
+    --color-text:   #222222;
+    --color-muted:  #767469;
+    --color-danger: #B23B3B;
+    --color-accent: #0F6E56;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: "Vazirmatn", "Tahoma", "Segoe UI", sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 24px 12px 60px;
+  }
+  .wrap { max-width: 360px; width: 100%; }
+  .topBar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  h1 { font-size: 17px; font-weight: 600; margin: 0; }
+  #gearBtn {
+    width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--color-border);
+    background: var(--color-card); font-size: 18px; cursor: pointer;
+  }
+  #dayTabs { display: flex; gap: 6px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
+  #dayTabs button {
+    width: 38px; height: 38px; border-radius: 50%;
+    border: 1px solid var(--color-border);
+    background: var(--color-card); color: var(--color-text);
+    font-size: 14px; cursor: pointer;
+  }
+  #dayTabs button.active { color: #ffffff; border-color: transparent; }
+  .clockBox { position: relative; width: 260px; height: 260px; margin: 0 auto; }
+  #clockFace {
+    width: 260px; height: 260px; border-radius: 50%;
+    background-color: var(--color-card);
+    border: 1px solid var(--color-border);
+  }
+  .hourLabel { position: absolute; font-size: 12px; color: var(--color-muted); }
+  #centerLabel { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; pointer-events: none; }
+  #dayName { font-size: 15px; font-weight: 600; }
+  #dayTotal { font-size: 12px; color: var(--color-muted); margin-top: 2px; }
+
+  #legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 16px; margin-top: 18px; }
+  .legendItem { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-muted); }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+
+  #dayList { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
+  .listRow { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .freqTag { font-size: 10px; color: var(--color-muted); border: 1px solid var(--color-border); border-radius: 8px; padding: 1px 6px; margin-right: auto; }
+  .emptyNote { font-size: 13px; color: var(--color-muted); text-align: center; padding: 8px 0; }
+
+  /* panel */
+  #overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  #overlay.open { opacity: 1; pointer-events: auto; }
+  #panel {
+    position: fixed; left: 0; right: 0; bottom: 0; max-height: 88vh;
+    background: var(--color-bg); border-radius: 16px 16px 0 0;
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
+    transform: translateY(100%); transition: transform .25s ease;
+    display: flex; flex-direction: column; z-index: 50;
+  }
+  #panel.open { transform: translateY(0); }
+  .panelHeader {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; border-bottom: 1px solid var(--color-border); font-weight: 600;
+  }
+  .panelHeader button { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--color-muted); }
+  .panelBody { padding: 14px 18px 28px; overflow-y: auto; }
+  .panelBody section { margin-bottom: 26px; }
+  .panelBody h3 { font-size: 14px; margin: 0 0 10px; }
+  .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 13px; }
+  .field input[type=text], .field input:not([type]), .field select {
+    padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 13px;
+    font-family: inherit; background: var(--color-card); color: var(--color-text);
+  }
+  .row2 { display: flex; gap: 8px; }
+  .row2 .field { flex: 1; }
+  .freqRow { display: flex; gap: 14px; font-size: 13px; align-items: center; }
+  .btn {
+    padding: 9px 14px; border-radius: 8px; border: none; font-size: 13px; cursor: pointer;
+    background: var(--color-accent); color: #fff; font-family: inherit;
+  }
+  .btn.secondary { background: var(--color-card); color: var(--color-text); border: 1px solid var(--color-border); }
+  .btn.danger { background: var(--color-danger); color: #fff; }
+  .btnRow { display: flex; gap: 8px; margin-top: 6px; }
+  .catRow, .taskRow {
+    display: flex; align-items: center; gap: 8px; padding: 8px 0; font-size: 13px;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .catRow:last-child, .taskRow:last-child { border-bottom: none; }
+  .catRow .swatch, .taskRow .swatch { width: 12px; height: 12px; }
+  .iconBtn { background: none; border: none; font-size: 15px; cursor: pointer; margin-right: 4px; }
+  .grow { flex: 1; }
+  .taskMeta { font-size: 11px; color: var(--color-muted); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="topBar">
+    <h1>ساعت هفتگی من</h1>
+    <button id="gearBtn" title="پنل مدیریت">⚙️</button>
+  </div>
+
+  <div id="dayTabs"></div>
+
+  <div class="clockBox">
+    <div id="clockFace"></div>
+    <span class="hourLabel" style="top:6px; left:50%; transform:translateX(-50%);">۰۰</span>
+    <span class="hourLabel" style="top:50%; right:6px; transform:translateY(-50%);">۰۶</span>
+    <span class="hourLabel" style="bottom:6px; left:50%; transform:translateX(-50%);">۱۲</span>
+    <span class="hourLabel" style="top:50%; left:6px; transform:translateY(-50%);">۱۸</span>
+    <div id="centerLabel">
+      <div id="dayName"></div>
+      <div id="dayTotal"></div>
+    </div>
+  </div>
+
+  <div id="legend"></div>
+  <div id="dayList"></div>
+</div>
+
+<div id="overlay"></div>
+<div id="panel">
+  <div class="panelHeader">
+    <span>⚙️ پنل مدیریت</span>
+    <button id="closePanel">✕</button>
+  </div>
+  <div class="panelBody">
+
+    <section>
+      <h3 id="taskFormTitle">➕ افزودن کار / کلاس</h3>
+      <form id="taskForm">
+        <div class="field">
+          <label>عنوان</label>
+          <input type="text" id="taskTitle" required placeholder="مثلاً: باشگاه">
+        </div>
+        <div class="field">
+          <label>🏷️ دسته‌بندی</label>
+          <select id="taskCategory" required></select>
+        </div>
+        <div class="field">
+          <label>📅 روز</label>
+          <select id="taskDay"></select>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>⏰ ساعت شروع</label>
+            <select id="taskStart"></select>
+          </div>
+          <div class="field">
+            <label>⏰ ساعت پایان</label>
+            <select id="taskEnd"></select>
+          </div>
+        </div>
+        <div class="field">
+          <label>🔄 تکرار</label>
+          <div class="freqRow">
+            <label><input type="radio" name="freq" value="weekly" checked> هر هفته</label>
+            <label><input type="radio" name="freq" value="even"> هفته زوج</label>
+          </div>
+        </div>
+        <div class="btnRow">
+          <button type="submit" class="btn" id="taskSubmitBtn">افزودن</button>
+          <button type="button" class="btn secondary" id="taskCancelEdit" style="display:none;">انصراف از ویرایش</button>
+        </div>
+      </form>
+    </section>
+
+    <section>
+      <h3>🏷️ دسته‌بندی‌ها</h3>
+      <div id="categoryList"></div>
+      <form id="categoryForm" class="row2" style="margin-top:10px; align-items:flex-end;">
+        <div class="field grow">
+          <label>نام دسته‌بندی جدید</label>
+          <input type="text" id="catName" required placeholder="مثلاً: کار، ورزش">
+        </div>
+        <div class="field">
+          <label>🎨 رنگ</label>
+          <input type="color" id="catColor" value="#3B6FB2">
+        </div>
+        <button type="submit" class="btn">افزودن</button>
+      </form>
+    </section>
+
+    <section>
+      <h3>📋 همه‌ی کارها</h3>
+      <div id="taskListAll"></div>
+    </section>
+
+    <section>
+      <button id="resetBtn" class="btn danger">🔄 بازگردانی به برنامه اولیه</button>
+    </section>
+
+  </div>
+</div>
+
+<script>
+/* ---------- تنظیمات پایه ---------- */
+const STORAGE_KEY = "weeklyClockData_v1";
+const FA_DAYS = ["شنبه","یکشنبه","دوشنبه","سه‌شنبه","چهارشنبه","پنج‌شنبه","جمعه"];
+const fa = n => n.toString().replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
+const pct = h => (h/24*100).toFixed(2) + "%";
+const genId = () => "id-" + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+const DEFAULT_DATA = {
+  categories: [
+    { id: "c-uni", name: "دانشگاه", color: "#0F6E56" }
+  ],
+  tasks: [
+    { id: genId(), title: "اجرای احکام مدنی", categoryId: "c-uni", day: "شنبه", start: 18, end: 20, freq: "weekly" },
+    { id: genId(), title: "متون فقه (۴)", categoryId: "c-uni", day: "شنبه", start: 18, end: 20, freq: "weekly" },
+    { id: genId(), title: "قواعد فقه (۲)", categoryId: "c-uni", day: "یکشنبه", start: 16, end: 18, freq: "weekly" },
+    { id: genId(), title: "کارآموزی قضایی", categoryId: "c-uni", day: "یکشنبه", start: 16, end: 18, freq: "weekly" },
+    { id: genId(), title: "ج.اختصاصی (۴)", categoryId: "c-uni", day: "یکشنبه", start: 18, end: 20, freq: "even" },
+    { id: genId(), title: "حقوق فضای مجازی", categoryId: "c-uni", day: "دوشنبه", start: 18, end: 20, freq: "weekly" },
+    { id: genId(), title: "حقوق مدنی (۸)", categoryId: "c-uni", day: "سه‌شنبه", start: 10, end: 12, freq: "weekly" },
+    { id: genId(), title: "ج.اختصاصی (۳)", categoryId: "c-uni", day: "سه‌شنبه", start: 16, end: 18, freq: "weekly" },
+    { id: genId(), title: "حقوق ثبت", categoryId: "c-uni", day: "سه‌شنبه", start: 18, end: 20, freq: "weekly" },
+    { id: genId(), title: "آیین دادرسی (۲)", categoryId: "c-uni", day: "چهارشنبه", start: 8, end: 10, freq: "even" },
+    { id: genId(), title: "متون فقه (۳)", categoryId: "c-uni", day: "چهارشنبه", start: 12, end: 14, freq: "weekly" },
+    { id: genId(), title: "ج.اختصاصی (۲)", categoryId: "c-uni", day: "چهارشنبه", start: 16, end: 18, freq: "weekly" },
+    { id: genId(), title: "کیفرشناسی", categoryId: "c-uni", day: "پنج‌شنبه", start: 16, end: 18, freq: "weekly" }
+  ]
+};
+
+/* ---------- ذخیره‌سازی ---------- */
+function loadStore() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return JSON.parse(JSON.stringify(DEFAULT_DATA));
+}
+function saveStore() { localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); }
+
+let store = loadStore();
+let selectedDay = FA_DAYS.find(d => store.tasks.some(t => t.day === d)) || FA_DAYS[0];
+let editingTaskId = null;
+
+/* ---------- عناصر ---------- */
+const dayTabsEl = document.getElementById("dayTabs");
+const clockFace = document.getElementById("clockFace");
+const legendEl = document.getElementById("legend");
+const dayListEl = document.getElementById("dayList");
+const taskCategorySelect = document.getElementById("taskCategory");
+const taskDaySelect = document.getElementById("taskDay");
+const taskStartSelect = document.getElementById("taskStart");
+const taskEndSelect = document.getElementById("taskEnd");
+const categoryListEl = document.getElementById("categoryList");
+const taskListAllEl = document.getElementById("taskListAll");
+
+/* ساخت گزینه‌های ساعت و روز (یک‌بار) */
+for (let h = 0; h <= 24; h++) {
+  [taskStartSelect, taskEndSelect].forEach(sel => {
+    const opt = document.createElement("option");
+    opt.value = h; opt.textContent = fa(h.toString().padStart(2,"0")) + ":۰۰";
+    sel.appendChild(opt);
+  });
+}
+taskEndSelect.value = 1;
+FA_DAYS.forEach(d => {
+  const opt = document.createElement("option");
+  opt.value = d; opt.textContent = d;
+  taskDaySelect.appendChild(opt);
+});
+
+/* ---------- رندر تب روزها ---------- */
+function renderDayTabs() {
+  dayTabsEl.innerHTML = "";
+  FA_DAYS.forEach(d => {
+    const btn = document.createElement("button");
+    btn.textContent = d[0];
+    btn.title = d;
+    const active = d === selectedDay;
+    btn.style.background = active ? "var(--color-accent)" : "var(--color-card)";
+    btn.style.color = active ? "#fff" : "var(--color-text)";
+    btn.onclick = () => { selectedDay = d; renderAll(); };
+    dayTabsEl.appendChild(btn);
+  });
+}
+
+/* ---------- رندر ساعت ---------- */
+function categoryColor(catId) {
+  const cat = store.categories.find(c => c.id === catId);
+  return cat ? cat.color : "#999999";
+}
+function hexToRgba(hex, alpha) {
+  const h = hex.replace("#","");
+  const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function renderClock() {
+  const tasks = store.tasks.filter(t => t.day === selectedDay).sort((a,b) => a.start - b.start);
+  let stops = [], cursor = 0;
+  tasks.forEach(t => {
+    if (t.start > cursor) stops.push(`var(--color-free) ${pct(cursor)} ${pct(t.start)}`);
+    const base = categoryColor(t.categoryId);
+    const color = t.freq === "even" ? hexToRgba(base, 0.5) : base;
+    stops.push(`${color} ${pct(t.start)} ${pct(t.end)}`);
+    cursor = Math.max(cursor, t.end);
+  });
+  if (cursor < 24) stops.push(`var(--color-free) ${pct(cursor)} 100%`);
+  clockFace.style.backgroundImage = stops.length ? `conic-gradient(from 0deg, ${stops.join(",")})` : "none";
+
+  document.getElementById("dayName").textContent = selectedDay;
+  const total = tasks.reduce((s,t) => s + (t.end - t.start), 0);
+  document.getElementById("dayTotal").textContent = tasks.length ? fa(total) + " ساعت درگیر" : "روز آزاد";
+}
+
+/* ---------- رندر لجند (خودکار از دسته‌بندی‌ها) ---------- */
+function renderLegend() {
+  legendEl.innerHTML = "";
+  store.categories.forEach(cat => {
+    const usesEven = store.tasks.some(t => t.categoryId === cat.id && t.freq === "even");
+    const usesWeekly = store.tasks.some(t => t.categoryId === cat.id && t.freq === "weekly");
+    if (usesWeekly || store.tasks.every(t => t.categoryId !== cat.id)) {
+      legendEl.insertAdjacentHTML("beforeend",
+        `<div class="legendItem"><span class="swatch" style="background:${cat.color}"></span>${cat.name}</div>`);
+    }
+    if (usesEven) {
+      legendEl.insertAdjacentHTML("beforeend",
+        `<div class="legendItem"><span class="swatch" style="background:${hexToRgba(cat.color,0.5)}"></span>${cat.name} (هفته زوج)</div>`);
+    }
+  });
+}
+
+/* ---------- رندر لیست کارهای روز انتخاب‌شده ---------- */
+function renderDayList() {
+  const tasks = store.tasks.filter(t => t.day === selectedDay).sort((a,b) => a.start - b.start);
+  dayListEl.innerHTML = "";
+  if (!tasks.length) {
+    dayListEl.innerHTML = `<div class="emptyNote">برای این روز کاری ثبت نشده.</div>`;
+    return;
+  }
+  tasks.forEach(t => {
+    const cat = store.categories.find(c => c.id === t.categoryId);
+    dayListEl.insertAdjacentHTML("beforeend", `
+      <div class="listRow">
+        <span class="dot" style="background:${cat ? cat.color : '#999'}"></span>
+        <span>${fa(t.start)}:۰۰ تا ${fa(t.end)}:۰۰ — ${t.title}</span>
+        <span class="freqTag">${t.freq === "even" ? "هفته زوج" : "هر هفته"}</span>
+      </div>`);
+  });
+}
+
+/* ---------- پنل: دسته‌بندی‌ها ---------- */
+function renderCategorySelect() {
+  const prev = taskCategorySelect.value;
+  taskCategorySelect.innerHTML = "";
+  store.categories.forEach(cat => {
+    const opt = document.createElement("option");
+    opt.value = cat.id; opt.textContent = cat.name;
+    taskCategorySelect.appendChild(opt);
+  });
+  if (store.categories.some(c => c.id === prev)) taskCategorySelect.value = prev;
+}
+
+function renderCategoryList() {
+  categoryListEl.innerHTML = "";
+  if (!store.categories.length) {
+    categoryListEl.innerHTML = `<div class="emptyNote">هنوز دسته‌بندی‌ای نساختی.</div>`;
+    return;
+  }
+  store.categories.forEach(cat => {
+    const row = document.createElement("div");
+    row.className = "catRow";
+    row.innerHTML = `
+      <span class="swatch" style="background:${cat.color}"></span>
+      <span class="grow">${cat.name}</span>
+      <button class="iconBtn" data-del-cat="${cat.id}" title="حذف دسته‌بندی">🗑️</button>`;
+    categoryListEl.appendChild(row);
+  });
+  categoryListEl.querySelectorAll("[data-del-cat]").forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.dataset.delCat;
+      const count = store.tasks.filter(t => t.categoryId === id).length;
+      const msg = count
+        ? `این دسته‌بندی ${fa(count)} کار داره. با حذف دسته‌بندی، اون کارها هم حذف می‌شن. مطمئنی؟`
+        : "این دسته‌بندی حذف بشه؟";
+      if (!confirm(msg)) return;
+      store.categories = store.categories.filter(c => c.id !== id);
+      store.tasks = store.tasks.filter(t => t.categoryId !== id);
+      saveStore(); renderAll();
+    };
+  });
+}
+
+/* ---------- پنل: لیست کامل کارها (ویرایش/حذف) ---------- */
+function renderTaskListAll() {
+  taskListAllEl.innerHTML = "";
+  if (!store.tasks.length) {
+    taskListAllEl.innerHTML = `<div class="emptyNote">هنوز کاری اضافه نکردی.</div>`;
+    return;
+  }
+  const sorted = [...store.tasks].sort((a,b) => FA_DAYS.indexOf(a.day) - FA_DAYS.indexOf(b.day) || a.start - b.start);
+  sorted.forEach(t => {
+    const cat = store.categories.find(c => c.id === t.categoryId);
+    const row = document.createElement("div");
+    row.className = "taskRow";
+    row.innerHTML = `
+      <span class="swatch" style="background:${cat ? cat.color : '#999'}"></span>
+      <span class="grow">
+        ${t.title}
+        <div class="taskMeta">${t.day} · ${fa(t.start)}:۰۰-${fa(t.end)}:۰۰ · ${t.freq === "even" ? "هفته زوج" : "هر هفته"}</div>
+      </span>
+      <button class="iconBtn" data-edit="${t.id}" title="ویرایش">✏️</button>
+      <button class="iconBtn" data-del="${t.id}" title="حذف">🗑️</button>`;
+    taskListAllEl.appendChild(row);
+  });
+  taskListAllEl.querySelectorAll("[data-edit]").forEach(btn => {
+    btn.onclick = () => startEditTask(btn.dataset.edit);
+  });
+  taskListAllEl.querySelectorAll("[data-del]").forEach(btn => {
+    btn.onclick = () => {
+      if (!confirm("این کار حذف بشه؟")) return;
+      store.tasks = store.tasks.filter(t => t.id !== btn.dataset.del);
+      saveStore(); renderAll();
+    };
+  });
+}
+
+/* ---------- فرم افزودن/ویرایش کار ---------- */
+const taskForm = document.getElementById("taskForm");
+const taskFormTitle = document.getElementById("taskFormTitle");
+const taskSubmitBtn = document.getElementById("taskSubmitBtn");
+const taskCancelEdit = document.getElementById("taskCancelEdit");
+
+function startEditTask(id) {
+  const t = store.tasks.find(x => x.id === id);
+  if (!t) return;
+  editingTaskId = id;
+  document.getElementById("taskTitle").value = t.title;
+  taskCategorySelect.value = t.categoryId;
+  taskDaySelect.value = t.day;
+  taskStartSelect.value = t.start;
+  taskEndSelect.value = t.end;
+  document.querySelector(`input[name=freq][value=${t.freq}]`).checked = true;
+  taskFormTitle.textContent = "✏️ ویرایش کار";
+  taskSubmitBtn.textContent = "ذخیره تغییرات";
+  taskCancelEdit.style.display = "inline-block";
+  document.getElementById("panel").scrollIntoView();
+}
+function resetTaskForm() {
+  editingTaskId = null;
+  taskForm.reset();
+  taskEndSelect.value = 1;
+  taskFormTitle.textContent = "➕ افزودن کار / کلاس";
+  taskSubmitBtn.textContent = "افزودن";
+  taskCancelEdit.style.display = "none";
+}
+taskCancelEdit.onclick = resetTaskForm;
+
+taskForm.addEventListener("submit", e => {
+  e.preventDefault();
+  if (!store.categories.length) { alert("اول یه دسته‌بندی بساز."); return; }
+  const start = Number(taskStartSelect.value), end = Number(taskEndSelect.value);
+  if (end <= start) { alert("ساعت پایان باید بعد از ساعت شروع باشه."); return; }
+  const data = {
+    title: document.getElementById("taskTitle").value.trim() || "بدون‌عنوان",
+    categoryId: taskCategorySelect.value,
+    day: taskDaySelect.value,
+    start, end,
+    freq: document.querySelector("input[name=freq]:checked").value
+  };
+  if (editingTaskId) {
+    const t = store.tasks.find(x => x.id === editingTaskId);
+    Object.assign(t, data);
+  } else {
+    store.tasks.push({ id: genId(), ...data });
+  }
+  saveStore();
+  selectedDay = data.day;
+  resetTaskForm();
+  renderAll();
+});
+
+/* ---------- فرم افزودن دسته‌بندی ---------- */
+document.getElementById("categoryForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const name = document.getElementById("catName").value.trim();
+  const color = document.getElementById("catColor").value;
+  if (!name) return;
+  store.categories.push({ id: genId(), name, color });
+  saveStore();
+  document.getElementById("categoryForm").reset();
+  document.getElementById("catColor").value = "#3B6FB2";
+  renderAll();
+});
+
+/* ---------- پنل باز/بسته ---------- */
+const panel = document.getElementById("panel");
+const overlay = document.getElementById("overlay");
+function openPanel() { panel.classList.add("open"); overlay.classList.add("open"); }
+function closePanel() { panel.classList.remove("open"); overlay.classList.remove("open"); resetTaskForm(); }
+document.getElementById("gearBtn").onclick = openPanel;
+document.getElementById("closePanel").onclick = closePanel;
+overlay.onclick = closePanel;
+
+/* ---------- بازگردانی ---------- */
+document.getElementById("resetBtn").onclick = () => {
+  if (!confirm("همه‌ی تغییرات پاک می‌شه و برنامه به حالت اولیه برمی‌گرده. مطمئنی؟")) return;
+  store = JSON.parse(JSON.stringify(DEFAULT_DATA));
+  saveStore();
+  selectedDay = FA_DAYS.find(d => store.tasks.some(t => t.day === d)) || FA_DAYS[0];
+  renderAll();
+};
+
+/* ---------- رندر کلی ---------- */
+function renderAll() {
+  renderDayTabs();
+  renderClock();
+  renderLegend();
+  renderDayList();
+  renderCategorySelect();
+  renderCategoryList();
+  renderTaskListAll();
+}
+renderAll();
+</script>
+</body>
+</html>
