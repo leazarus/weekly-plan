@@ -52,13 +52,17 @@
     font-size: 14px; cursor: pointer;
   }
   #dayTabs button.active { color: #ffffff; border-color: transparent; }
-  .clockBox { position: relative; width: 260px; height: 260px; margin: 0 auto; }
+  .clockBox { position: relative; width: 300px; height: 300px; margin: 0 auto; }
   #clockFace {
-    width: 260px; height: 260px; border-radius: 50%;
+    width: 300px; height: 300px; border-radius: 50%;
     background-color: var(--color-card);
     border: 1px solid var(--color-border);
   }
-  .hourLabel { position: absolute; font-size: 12px; color: var(--color-muted); }
+  #hourMarks { position: absolute; inset: 0; pointer-events: none; }
+  .tick { position: absolute; top: 50%; left: 50%; width: 1px; height: 7px; background: var(--color-border); }
+  .tick.major { height: 10px; background: var(--color-muted); }
+  .hourLabel { position: absolute; font-size: 11px; color: var(--color-muted); text-align: center; line-height: 1.3; white-space: nowrap; }
+  .hourLabel .ampm { display: block; font-size: 9px; color: var(--color-accent); }
   #centerLabel { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; pointer-events: none; }
   #dayName { font-size: 15px; font-weight: 600; }
   #dayTotal { font-size: 12px; color: var(--color-muted); margin-top: 2px; }
@@ -136,10 +140,7 @@
 
   <div class="clockBox">
     <div id="clockFace"></div>
-    <span class="hourLabel" style="top:6px; left:50%; transform:translateX(-50%);">۰۰</span>
-    <span class="hourLabel" style="top:50%; right:6px; transform:translateY(-50%);">۰۶</span>
-    <span class="hourLabel" style="bottom:6px; left:50%; transform:translateX(-50%);">۱۲</span>
-    <span class="hourLabel" style="top:50%; left:6px; transform:translateY(-50%);">۱۸</span>
+    <div id="hourMarks"></div>
     <div id="centerLabel">
       <div id="dayName"></div>
       <div id="dayTotal"></div>
@@ -159,6 +160,22 @@
   <div class="panelBody">
 
     <section>
+      <h3>🏷️ دسته‌بندی‌ها</h3>
+      <div id="categoryList"></div>
+      <form id="categoryForm" class="row2" style="margin-top:10px; align-items:flex-end;">
+        <div class="field grow">
+          <label>نام دسته‌بندی جدید</label>
+          <input type="text" id="catName" required placeholder="مثلاً: کار، ورزش">
+        </div>
+        <div class="field">
+          <label>🎨 رنگ</label>
+          <input type="color" id="catColor" value="#3B6FB2">
+        </div>
+        <button type="submit" class="btn">افزودن</button>
+      </form>
+    </section>
+
+    <section>
       <h3 id="taskFormTitle">➕ افزودن کار / کلاس</h3>
       <form id="taskForm">
         <div class="field">
@@ -175,12 +192,12 @@
         </div>
         <div class="row2">
           <div class="field">
-            <label>⏰ ساعت شروع</label>
-            <select id="taskStart"></select>
+            <label>⏰ ساعت شروع (دقیق)</label>
+            <input type="time" id="taskStart" required>
           </div>
           <div class="field">
-            <label>⏰ ساعت پایان</label>
-            <select id="taskEnd"></select>
+            <label>⏰ ساعت پایان (دقیق)</label>
+            <input type="time" id="taskEnd" required>
           </div>
         </div>
         <div class="field">
@@ -194,22 +211,6 @@
           <button type="submit" class="btn" id="taskSubmitBtn">افزودن</button>
           <button type="button" class="btn secondary" id="taskCancelEdit" style="display:none;">انصراف از ویرایش</button>
         </div>
-      </form>
-    </section>
-
-    <section>
-      <h3>🏷️ دسته‌بندی‌ها</h3>
-      <div id="categoryList"></div>
-      <form id="categoryForm" class="row2" style="margin-top:10px; align-items:flex-end;">
-        <div class="field grow">
-          <label>نام دسته‌بندی جدید</label>
-          <input type="text" id="catName" required placeholder="مثلاً: کار، ورزش">
-        </div>
-        <div class="field">
-          <label>🎨 رنگ</label>
-          <input type="color" id="catColor" value="#3B6FB2">
-        </div>
-        <button type="submit" class="btn">افزودن</button>
       </form>
     </section>
 
@@ -232,6 +233,18 @@ const FA_DAYS = ["شنبه","یکشنبه","دوشنبه","سه‌شنبه","چ�
 const fa = n => n.toString().replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
 const pct = h => (h/24*100).toFixed(2) + "%";
 const genId = () => "id-" + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const timeToHours = str => {
+  const [h,m] = str.split(":").map(Number);
+  return h + (m || 0) / 60;
+};
+const hoursToTime = h => {
+  const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
+  return String(hh).padStart(2,"0") + ":" + String(mm).padStart(2,"0");
+};
+const faTime = h => {
+  const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
+  return fa(String(hh).padStart(2,"0")) + ":" + fa(String(mm).padStart(2,"0"));
+};
 
 const DEFAULT_DATA = {
   categories: [
@@ -280,15 +293,9 @@ const taskEndSelect = document.getElementById("taskEnd");
 const categoryListEl = document.getElementById("categoryList");
 const taskListAllEl = document.getElementById("taskListAll");
 
-/* ساخت گزینه‌های ساعت و روز (یک‌بار) */
-for (let h = 0; h <= 24; h++) {
-  [taskStartSelect, taskEndSelect].forEach(sel => {
-    const opt = document.createElement("option");
-    opt.value = h; opt.textContent = fa(h.toString().padStart(2,"0")) + ":۰۰";
-    sel.appendChild(opt);
-  });
-}
-taskEndSelect.value = 1;
+/* مقداردهی اولیه‌ی روز و ساعت */
+taskStartSelect.value = "18:00";
+taskEndSelect.value = "19:00";
 FA_DAYS.forEach(d => {
   const opt = document.createElement("option");
   opt.value = d; opt.textContent = d;
@@ -336,7 +343,9 @@ function renderClock() {
 
   document.getElementById("dayName").textContent = selectedDay;
   const total = tasks.reduce((s,t) => s + (t.end - t.start), 0);
-  document.getElementById("dayTotal").textContent = tasks.length ? fa(total) + " ساعت درگیر" : "روز آزاد";
+  const th = Math.floor(total), tm = Math.round((total - th) * 60);
+  const totalText = tm ? `${fa(th)} ساعت و ${fa(tm)} دقیقه` : `${fa(th)} ساعت`;
+  document.getElementById("dayTotal").textContent = tasks.length ? totalText + " درگیر" : "روز آزاد";
 }
 
 /* ---------- رندر لجند (خودکار از دسته‌بندی‌ها) ---------- */
@@ -369,7 +378,7 @@ function renderDayList() {
     dayListEl.insertAdjacentHTML("beforeend", `
       <div class="listRow">
         <span class="dot" style="background:${cat ? cat.color : '#999'}"></span>
-        <span>${fa(t.start)}:۰۰ تا ${fa(t.end)}:۰۰ — ${t.title}</span>
+        <span>${faTime(t.start)} تا ${faTime(t.end)} — ${t.title}</span>
         <span class="freqTag">${t.freq === "even" ? "هفته زوج" : "هر هفته"}</span>
       </div>`);
   });
@@ -433,7 +442,7 @@ function renderTaskListAll() {
       <span class="swatch" style="background:${cat ? cat.color : '#999'}"></span>
       <span class="grow">
         ${t.title}
-        <div class="taskMeta">${t.day} · ${fa(t.start)}:۰۰-${fa(t.end)}:۰۰ · ${t.freq === "even" ? "هفته زوج" : "هر هفته"}</div>
+        <div class="taskMeta">${t.day} · ${faTime(t.start)}-${faTime(t.end)} · ${t.freq === "even" ? "هفته زوج" : "هر هفته"}</div>
       </span>
       <button class="iconBtn" data-edit="${t.id}" title="ویرایش">✏️</button>
       <button class="iconBtn" data-del="${t.id}" title="حذف">🗑️</button>`;
@@ -464,8 +473,8 @@ function startEditTask(id) {
   document.getElementById("taskTitle").value = t.title;
   taskCategorySelect.value = t.categoryId;
   taskDaySelect.value = t.day;
-  taskStartSelect.value = t.start;
-  taskEndSelect.value = t.end;
+  taskStartSelect.value = hoursToTime(t.start);
+  taskEndSelect.value = hoursToTime(t.end);
   document.querySelector(`input[name=freq][value=${t.freq}]`).checked = true;
   taskFormTitle.textContent = "✏️ ویرایش کار";
   taskSubmitBtn.textContent = "ذخیره تغییرات";
@@ -475,7 +484,8 @@ function startEditTask(id) {
 function resetTaskForm() {
   editingTaskId = null;
   taskForm.reset();
-  taskEndSelect.value = 1;
+  taskStartSelect.value = "18:00";
+  taskEndSelect.value = "19:00";
   taskFormTitle.textContent = "➕ افزودن کار / کلاس";
   taskSubmitBtn.textContent = "افزودن";
   taskCancelEdit.style.display = "none";
@@ -485,7 +495,8 @@ taskCancelEdit.onclick = resetTaskForm;
 taskForm.addEventListener("submit", e => {
   e.preventDefault();
   if (!store.categories.length) { alert("اول یه دسته‌بندی بساز."); return; }
-  const start = Number(taskStartSelect.value), end = Number(taskEndSelect.value);
+  if (!taskStartSelect.value || !taskEndSelect.value) { alert("ساعت شروع و پایان رو مشخص کن."); return; }
+  const start = timeToHours(taskStartSelect.value), end = timeToHours(taskEndSelect.value);
   if (end <= start) { alert("ساعت پایان باید بعد از ساعت شروع باشه."); return; }
   const data = {
     title: document.getElementById("taskTitle").value.trim() || "بدون‌عنوان",
@@ -555,6 +566,38 @@ themeBtn.onclick = () => {
   applyTheme(current === "dark" ? "light" : "dark");
 };
 applyTheme(localStorage.getItem(THEME_KEY) || "light");
+
+/* ---------- نشانگرهای دقیق ساعت روی صفحه‌ی ساعت ---------- */
+function polar(radius, hourFraction) {
+  const angleDeg = (hourFraction / 24) * 360;
+  const rad = angleDeg * Math.PI / 180;
+  return { x: radius * Math.sin(rad), y: -radius * Math.cos(rad) };
+}
+function buildHourMarks() {
+  const marksEl = document.getElementById("hourMarks");
+  marksEl.innerHTML = "";
+  for (let h = 0; h < 24; h++) {
+    const angleDeg = (h / 24) * 360;
+    const tick = document.createElement("div");
+    tick.className = "tick" + (h % 3 === 0 ? " major" : "");
+    tick.style.transform = `translate(-50%,-50%) rotate(${angleDeg}deg) translateY(-142px)`;
+    marksEl.appendChild(tick);
+  }
+  [0, 3, 6, 9, 12, 15, 18, 21].forEach(h => {
+    const { x, y } = polar(120, h);
+    const label = document.createElement("div");
+    label.className = "hourLabel";
+    label.style.left = `calc(50% + ${x}px)`;
+    label.style.top = `calc(50% + ${y}px)`;
+    label.style.transform = "translate(-50%,-50%)";
+    let html = fa(h.toString().padStart(2, "0")) + ":۰۰";
+    if (h === 6) html += `<span class="ampm">ق.ظ (AM)</span>`;
+    if (h === 18) html += `<span class="ampm">ب.ظ (PM)</span>`;
+    label.innerHTML = html;
+    marksEl.appendChild(label);
+  });
+}
+buildHourMarks();
 
 /* ---------- رندر کلی ---------- */
 function renderAll() {
