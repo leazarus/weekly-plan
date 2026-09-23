@@ -226,6 +226,13 @@
   </div>
 </div>
 
+<div id="confirmOverlay" style="position:fixed; inset:0; background:rgba(0,0,0,0.45); display:none; align-items:center; justify-content:center; z-index:100; padding:20px;">
+  <div style="background:var(--color-bg); border:1px solid var(--color-border); border-radius:14px; padding:22px 20px; max-width:280px; width:100%; text-align:center;">
+    <p id="confirmMsg" style="font-size:14px; color:var(--color-text); margin:0 0 18px; line-height:1.6;"></p>
+    <div id="confirmBtns" style="display:flex; gap:8px; justify-content:center;"></div>
+  </div>
+</div>
+
 <script>
 /* ---------- تنظیمات پایه ---------- */
 const STORAGE_KEY = "weeklyClockData_v1";
@@ -245,6 +252,38 @@ const faTime = h => {
   const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
   return fa(String(hh).padStart(2,"0")) + ":" + fa(String(mm).padStart(2,"0"));
 };
+
+/* ---------- تأیید/هشدار سفارشی (بدون confirm/alert بومی مرورگر) ---------- */
+const confirmOverlay = document.getElementById("confirmOverlay");
+const confirmMsgEl = document.getElementById("confirmMsg");
+const confirmBtnsEl = document.getElementById("confirmBtns");
+function showConfirm(message) {
+  return new Promise(resolve => {
+    confirmMsgEl.textContent = message;
+    confirmBtnsEl.innerHTML = "";
+    const yes = document.createElement("button");
+    yes.className = "btn danger"; yes.textContent = "بله، حذف کن";
+    const no = document.createElement("button");
+    no.className = "btn secondary"; no.textContent = "انصراف";
+    confirmBtnsEl.appendChild(yes); confirmBtnsEl.appendChild(no);
+    confirmOverlay.style.display = "flex";
+    const close = result => { confirmOverlay.style.display = "none"; resolve(result); };
+    yes.onclick = () => close(true);
+    no.onclick = () => close(false);
+    confirmOverlay.onclick = e => { if (e.target === confirmOverlay) close(false); };
+  });
+}
+function showAlert(message) {
+  confirmMsgEl.textContent = message;
+  confirmBtnsEl.innerHTML = "";
+  const ok = document.createElement("button");
+  ok.className = "btn"; ok.textContent = "باشه";
+  confirmBtnsEl.appendChild(ok);
+  confirmOverlay.style.display = "flex";
+  const close = () => { confirmOverlay.style.display = "none"; };
+  ok.onclick = close;
+  confirmOverlay.onclick = e => { if (e.target === confirmOverlay) close(); };
+}
 
 const DEFAULT_DATA = {
   categories: [
@@ -412,13 +451,14 @@ function renderCategoryList() {
     categoryListEl.appendChild(row);
   });
   categoryListEl.querySelectorAll("[data-del-cat]").forEach(btn => {
-    btn.onclick = () => {
+    btn.onclick = async () => {
       const id = btn.dataset.delCat;
       const count = store.tasks.filter(t => t.categoryId === id).length;
       const msg = count
         ? `این دسته‌بندی ${fa(count)} کار داره. با حذف دسته‌بندی، اون کارها هم حذف می‌شن. مطمئنی؟`
         : "این دسته‌بندی حذف بشه؟";
-      if (!confirm(msg)) return;
+      const ok = await showConfirm(msg);
+      if (!ok) return;
       store.categories = store.categories.filter(c => c.id !== id);
       store.tasks = store.tasks.filter(t => t.categoryId !== id);
       saveStore(); renderAll();
@@ -452,8 +492,9 @@ function renderTaskListAll() {
     btn.onclick = () => startEditTask(btn.dataset.edit);
   });
   taskListAllEl.querySelectorAll("[data-del]").forEach(btn => {
-    btn.onclick = () => {
-      if (!confirm("این کار حذف بشه؟")) return;
+    btn.onclick = async () => {
+      const ok = await showConfirm("این کار حذف بشه؟");
+      if (!ok) return;
       store.tasks = store.tasks.filter(t => t.id !== btn.dataset.del);
       saveStore(); renderAll();
     };
@@ -494,10 +535,10 @@ taskCancelEdit.onclick = resetTaskForm;
 
 taskForm.addEventListener("submit", e => {
   e.preventDefault();
-  if (!store.categories.length) { alert("اول یه دسته‌بندی بساز."); return; }
-  if (!taskStartSelect.value || !taskEndSelect.value) { alert("ساعت شروع و پایان رو مشخص کن."); return; }
+  if (!store.categories.length) { showAlert("اول یه دسته‌بندی بساز."); return; }
+  if (!taskStartSelect.value || !taskEndSelect.value) { showAlert("ساعت شروع و پایان رو مشخص کن."); return; }
   const start = timeToHours(taskStartSelect.value), end = timeToHours(taskEndSelect.value);
-  if (end <= start) { alert("ساعت پایان باید بعد از ساعت شروع باشه."); return; }
+  if (end <= start) { showAlert("ساعت پایان باید بعد از ساعت شروع باشه."); return; }
   const data = {
     title: document.getElementById("taskTitle").value.trim() || "بدون‌عنوان",
     categoryId: taskCategorySelect.value,
@@ -540,8 +581,9 @@ document.getElementById("closePanel").onclick = closePanel;
 overlay.onclick = closePanel;
 
 /* ---------- بازگردانی ---------- */
-document.getElementById("resetBtn").onclick = () => {
-  if (!confirm("همه‌ی تغییرات پاک می‌شه و برنامه به حالت اولیه برمی‌گرده. مطمئنی؟")) return;
+document.getElementById("resetBtn").onclick = async () => {
+  const ok = await showConfirm("همه‌ی تغییرات پاک می‌شه و برنامه به حالت اولیه برمی‌گرده. مطمئنی؟");
+  if (!ok) return;
   store = JSON.parse(JSON.stringify(DEFAULT_DATA));
   saveStore();
   selectedDay = FA_DAYS.find(d => store.tasks.some(t => t.day === d)) || FA_DAYS[0];
