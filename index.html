@@ -220,16 +220,38 @@
     </section>
 
     <section>
+      <h3>📤 خروجی / ورودی گرفتن از داده‌ها</h3>
+      <div class="btnRow">
+        <button id="exportBtn" class="btn secondary">📤 خروجی گرفتن (Export)</button>
+        <button id="importBtn" class="btn secondary">📥 وارد کردن (Import)</button>
+      </div>
+      <p style="font-size:11px; color:var(--color-muted); margin-top:8px; line-height:1.6;">
+        با «خروجی گرفتن» یه متن می‌گیری که همه‌ی کارها و دسته‌بندی‌های فعلیت رو داره — می‌تونی جایی ذخیره‌ش کنی یا برای من بفرستی تا توی کد اصلی وارد کنم.
+      </p>
+    </section>
+
+    <section>
       <button id="resetBtn" class="btn danger">🔄 بازگردانی به برنامه اولیه</button>
     </section>
 
   </div>
 </div>
 
-<div id="confirmOverlay" style="position:fixed; inset:0; background:rgba(0,0,0,0.45); display:none; align-items:center; justify-content:center; z-index:100; padding:20px;">
+<div id="confirmOverlay" style="position:fixed; inset:0; background:rgba(0,0,0,0.45); display:none; align-items:center; justify-content:center; z-index:120; padding:20px;">
   <div style="background:var(--color-bg); border:1px solid var(--color-border); border-radius:14px; padding:22px 20px; max-width:280px; width:100%; text-align:center;">
     <p id="confirmMsg" style="font-size:14px; color:var(--color-text); margin:0 0 18px; line-height:1.6;"></p>
     <div id="confirmBtns" style="display:flex; gap:8px; justify-content:center;"></div>
+  </div>
+</div>
+
+<div id="dataOverlay" style="position:fixed; inset:0; background:rgba(0,0,0,0.45); display:none; align-items:center; justify-content:center; z-index:110; padding:20px;">
+  <div style="background:var(--color-bg); border:1px solid var(--color-border); border-radius:14px; padding:18px; max-width:320px; width:100%;">
+    <p id="dataModalTitle" style="font-size:13px; font-weight:600; margin:0 0 10px; color:var(--color-text);"></p>
+    <textarea id="dataTextarea" style="width:100%; height:160px; font-family:monospace; font-size:11px; padding:8px; border:1px solid var(--color-border); border-radius:8px; background:var(--color-card); color:var(--color-text); direction:ltr; resize:vertical; box-sizing:border-box;"></textarea>
+    <div style="display:flex; gap:8px; margin-top:10px; justify-content:flex-end;">
+      <button id="dataModalCancel" class="btn secondary">بستن</button>
+      <button id="dataModalAction" class="btn"></button>
+    </div>
   </div>
 </div>
 
@@ -589,6 +611,58 @@ document.getElementById("resetBtn").onclick = async () => {
   selectedDay = FA_DAYS.find(d => store.tasks.some(t => t.day === d)) || FA_DAYS[0];
   renderAll();
 };
+
+/* ---------- خروجی / ورودی گرفتن از داده‌ها ---------- */
+const dataOverlay = document.getElementById("dataOverlay");
+const dataTextarea = document.getElementById("dataTextarea");
+const dataModalTitle = document.getElementById("dataModalTitle");
+const dataModalAction = document.getElementById("dataModalAction");
+const dataModalCancel = document.getElementById("dataModalCancel");
+
+function openExport() {
+  dataModalTitle.textContent = "این متن رو کپی کن و برای من بفرست:";
+  dataTextarea.value = JSON.stringify(store, null, 2);
+  dataTextarea.readOnly = true;
+  dataModalAction.textContent = "کپی کردن";
+  dataModalAction.onclick = () => {
+    dataTextarea.focus();
+    dataTextarea.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    try { navigator.clipboard && navigator.clipboard.writeText(dataTextarea.value); } catch (e) {}
+    dataModalAction.textContent = "کپی شد ✓";
+    setTimeout(() => { dataModalAction.textContent = "کپی کردن"; }, 1500);
+  };
+  dataOverlay.style.display = "flex";
+  setTimeout(() => { dataTextarea.focus(); dataTextarea.select(); }, 50);
+}
+
+function openImport() {
+  dataModalTitle.textContent = "متنی که قبلاً Export گرفته بودی رو اینجا پیست کن:";
+  dataTextarea.value = "";
+  dataTextarea.readOnly = false;
+  dataModalAction.textContent = "بارگذاری";
+  dataModalAction.onclick = async () => {
+    let parsed;
+    try { parsed = JSON.parse(dataTextarea.value); }
+    catch (e) { showAlert("این متن یه JSON معتبر نیست."); return; }
+    if (!parsed || !Array.isArray(parsed.categories) || !Array.isArray(parsed.tasks)) {
+      showAlert("ساختار این داده با برنامه سازگار نیست."); return;
+    }
+    const ok = await showConfirm("همه‌ی داده‌های فعلی با این جایگزین می‌شن. مطمئنی؟");
+    if (!ok) return;
+    store = parsed;
+    saveStore();
+    dataOverlay.style.display = "none";
+    selectedDay = FA_DAYS.find(d => store.tasks.some(t => t.day === d)) || FA_DAYS[0];
+    renderAll();
+  };
+  dataOverlay.style.display = "flex";
+}
+
+document.getElementById("exportBtn").onclick = openExport;
+document.getElementById("importBtn").onclick = openImport;
+dataModalCancel.onclick = () => { dataOverlay.style.display = "none"; };
+dataOverlay.onclick = e => { if (e.target === dataOverlay) dataOverlay.style.display = "none"; };
 
 /* ---------- تم روشن/تیره ---------- */
 const THEME_KEY = "weeklyClockTheme_v1";
