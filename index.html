@@ -73,6 +73,17 @@
 
   #dayList { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
   .listRow { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .todoCheck { width: 16px; height: 16px; flex-shrink: 0; accent-color: var(--color-accent); cursor: pointer; }
+  body { padding-bottom: 90px; }
+  .card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
+  #tabBar { position: fixed; bottom: 0; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; padding: 8px 12px 12px; background: var(--color-bg); border-top: 1px solid var(--color-border); z-index: 40; }
+  #tabBar button { flex: 1; max-width: 110px; padding: 9px 4px; border-radius: 12px; border: none; background: transparent; color: var(--color-muted); font-size: 12px; font-family: inherit; cursor: pointer; }
+  #tabBar button.active { background: var(--color-accent); color: #fff; }
+  .dayCard { display: flex; gap: 12px; align-items: flex-start; }
+  .ring { position: relative; width: 54px; height: 54px; flex-shrink: 0; }
+  .ring svg { transform: rotate(-90deg); }
+  .ring span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+  .ckRow { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0; }
   .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .freqTag { font-size: 10px; color: var(--color-muted); border: 1px solid var(--color-border); border-radius: 8px; padding: 1px 6px; margin-right: auto; }
   .emptyNote { font-size: 13px; color: var(--color-muted); text-align: center; padding: 8px 0; }
@@ -136,6 +147,7 @@
     </div>
   </div>
 
+  <div id="pageSchedule">
   <div id="dayTabs"></div>
 
   <div class="clockBox">
@@ -149,8 +161,32 @@
 
   <div id="legend"></div>
   <div id="dayList"></div>
+  </div>
+
+  <div id="pageTodo" style="display:none;">
+    <div class="card" id="weekSummary"></div>
+    <form id="todoForm" class="card row2" style="align-items:flex-end;">
+      <div class="field grow"><label>کار جدید (خارج از برنامه)</label><input type="text" id="todoTitle" required placeholder="مثلاً: خرید کتاب"></div>
+      <div class="field"><label>روز</label><select id="todoDay"></select></div>
+      <button type="submit" class="btn">+</button>
+    </form>
+    <div id="todoDays"></div>
+  </div>
+
+  <div id="pageNot" style="display:none;">
+    <form id="notForm" class="card row2" style="align-items:flex-end;">
+      <div class="field grow"><label>چیزی که نباید انجام بدی</label><input type="text" id="notTitle" required placeholder="مثلاً: گوشی بعد از بیدار شدن"></div>
+      <button type="submit" class="btn">+</button>
+    </form>
+    <div id="notList"></div>
+  </div>
 </div>
 
+<nav id="tabBar">
+  <button data-page="Schedule">🕐 برنامه</button>
+  <button data-page="Todo">✅ تودو</button>
+  <button data-page="Not">🚫 ناتودو</button>
+</nav>
 <div id="overlay"></div>
 <div id="panel">
   <div class="panelHeader">
@@ -338,7 +374,29 @@ function loadStore() {
 }
 function saveStore() { localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); }
 
+/* هفته از شنبه شروع می‌شه */
+function getWeekKey(date) {
+  const since = (date.getDay() - 6 + 7) % 7;
+  const ws = new Date(date);
+  ws.setDate(date.getDate() - since);
+  ws.setHours(0, 0, 0, 0);
+  return ws.toISOString().slice(0, 10);
+}
+function checkWeeklyReset() {
+  store.completedThisWeek = store.completedThisWeek || {};
+  store.todos = store.todos || [];
+  store.notTodos = store.notTodos || [];
+  const wk = getWeekKey(new Date());
+  if (store.weekKey !== wk) {
+    store.completedThisWeek = {};
+    store.todos.forEach(t => t.done = false);
+    store.weekKey = wk;
+    saveStore();
+  }
+}
+
 let store = loadStore();
+checkWeeklyReset();
 let selectedDay = FA_DAYS.find(d => store.tasks.some(t => t.day === d)) || FA_DAYS[0];
 let editingTaskId = null;
 
@@ -436,12 +494,17 @@ function renderDayList() {
   }
   tasks.forEach(t => {
     const cat = store.categories.find(c => c.id === t.categoryId);
+    const done = !!store.completedThisWeek[t.id];
     dayListEl.insertAdjacentHTML("beforeend", `
       <div class="listRow">
+        <input type="checkbox" class="todoCheck" data-task="${t.id}" ${done ? "checked" : ""}>
         <span class="dot" style="background:${cat ? cat.color : '#999'}"></span>
-        <span>${faTime(t.start)} تا ${faTime(t.end)} — ${t.title}</span>
+        <span style="${done ? "text-decoration:line-through;opacity:.55;" : ""}">${faTime(t.start)} تا ${faTime(t.end)} — ${t.title}</span>
         <span class="freqTag">${t.freq === "even" ? "هفته زوج" : "هر هفته"}</span>
       </div>`);
+  });
+  dayListEl.querySelectorAll(".todoCheck").forEach(cb => {
+    cb.onchange = () => { store.completedThisWeek[cb.dataset.task] = cb.checked; saveStore(); renderDayList(); };
   });
 }
 
@@ -715,12 +778,111 @@ function buildHourMarks() {
 }
 buildHourMarks();
 
+/* ---------- تودو / ناتودو / صفحه‌ها ---------- */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const todos = () => (store.todos = store.todos || []);
+const nots = () => (store.notTodos = store.notTodos || []);
+const dKey = d => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+
+function ringSVG(done, total) {
+  const p = total ? done / total : 0, C = 2 * Math.PI * 21;
+  return `<div class="ring"><svg width="54" height="54"><circle cx="27" cy="27" r="21" fill="none" stroke="var(--color-free)" stroke-width="6"/><circle cx="27" cy="27" r="21" fill="none" stroke="var(--color-accent)" stroke-width="6" stroke-linecap="round" stroke-dasharray="${(p*C).toFixed(1)} ${C.toFixed(1)}"/></svg><span>${total ? fa(Math.round(p*100)) + "٪" : "—"}</span></div>`;
+}
+
+function renderTodo() {
+  const box = document.getElementById("todoDays");
+  box.innerHTML = "";
+  let allDone = 0, allTotal = 0;
+  FA_DAYS.forEach(day => {
+    const items = [
+      ...store.tasks.filter(t => t.day === day).sort((a,b) => a.start - b.start)
+        .map(t => ({id:t.id, title:t.title, done:!!store.completedThisWeek[t.id], kind:"s", time:faTime(t.start)})),
+      ...todos().filter(t => t.day === day).map(t => ({id:t.id, title:t.title, done:!!t.done, kind:"x"}))
+    ];
+    const done = items.filter(i => i.done).length;
+    allDone += done; allTotal += items.length;
+    const rows = items.length ? items.map(i => `<div class="ckRow"><input type="checkbox" class="todoCheck" data-k="${i.kind}" data-id="${i.id}" ${i.done ? "checked" : ""}><span class="grow" style="${i.done ? "text-decoration:line-through;opacity:.55;" : ""}">${i.time ? i.time + " — " : ""}${esc(i.title)}</span>${i.kind === "x" ? `<button class="iconBtn" data-rm="${i.id}">✕</button>` : ""}</div>`).join("") : `<div class="emptyNote" style="text-align:right">کاری نیست</div>`;
+    box.insertAdjacentHTML("beforeend", `<div class="card dayCard">${ringSVG(done, items.length)}<div class="grow"><b style="font-size:14px">${day}</b>${rows}</div></div>`);
+  });
+  document.getElementById("weekSummary").innerHTML = `<div class="dayCard">${ringSVG(allDone, allTotal)}<div><b>پیشرفت این هفته</b><div style="font-size:12px;color:var(--color-muted);margin-top:2px">${fa(allDone)} از ${fa(allTotal)} کار انجام شده — شنبه‌ها خودکار ریست می‌شه</div><button class="btn secondary" id="resetChecks" style="margin-top:8px;padding:5px 10px;font-size:11px">ریست تیک‌ها</button></div></div>`;
+  box.querySelectorAll(".todoCheck").forEach(cb => cb.onchange = () => {
+    if (cb.dataset.k === "s") store.completedThisWeek[cb.dataset.id] = cb.checked;
+    else todos().find(t => t.id === cb.dataset.id).done = cb.checked;
+    saveStore(); renderTodo(); renderDayList();
+  });
+  box.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { store.todos = todos().filter(t => t.id !== b.dataset.rm); saveStore(); renderTodo(); });
+  document.getElementById("resetChecks").onclick = async () => {
+    if (!(await showConfirm("همه‌ی تیک‌های این هفته پاک بشن؟"))) return;
+    store.completedThisWeek = {}; todos().forEach(t => t.done = false);
+    saveStore(); renderTodo(); renderDayList();
+  };
+}
+
+function streakOf(n) {
+  const log = n.log || {}, d = new Date();
+  let s = 0;
+  if (!log[dKey(d)]) d.setDate(d.getDate() - 1);
+  while (log[dKey(d)] === "held") { s++; d.setDate(d.getDate() - 1); }
+  return s;
+}
+function renderNot() {
+  const box = document.getElementById("notList");
+  box.innerHTML = nots().length ? "" : `<div class="emptyNote">هنوز چیزی اضافه نکردی. یه عادتی که می‌خوای ازش دوری کنی بنویس.</div>`;
+  const today = dKey(new Date());
+  nots().forEach(n => {
+    const log = n.log = n.log || {}, st = log[today];
+    let dots = "";
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const v = log[dKey(d)];
+      dots += `<span class="dot" style="width:10px;height:10px;background:${v === "held" ? "var(--color-accent)" : v === "slipped" ? "var(--color-danger)" : "var(--color-free)"}"></span>`;
+    }
+    box.insertAdjacentHTML("beforeend", `<div class="card"><div class="ckRow"><b class="grow" style="font-size:14px">🚫 ${esc(n.title)}</b><button class="iconBtn" data-rmn="${n.id}">🗑️</button></div><div style="font-size:12px;color:var(--color-muted);margin:2px 0 8px">🔥 ${fa(streakOf(n))} روز پشت‌سرهم</div><div style="display:flex;gap:4px;margin-bottom:10px">${dots}</div><div class="btnRow"><button class="btn ${st === "held" ? "" : "secondary"}" data-h="${n.id}">✓ نگه داشتم</button><button class="btn ${st === "slipped" ? "danger" : "secondary"}" data-s="${n.id}">✗ لغزیدم</button></div></div>`);
+  });
+  const set = (id, v) => {
+    const n = nots().find(x => x.id === id);
+    n.log = n.log || {};
+    if (n.log[today] === v) delete n.log[today]; else n.log[today] = v;
+    saveStore(); renderNot();
+  };
+  box.querySelectorAll("[data-h]").forEach(b => b.onclick = () => set(b.dataset.h, "held"));
+  box.querySelectorAll("[data-s]").forEach(b => b.onclick = () => set(b.dataset.s, "slipped"));
+  box.querySelectorAll("[data-rmn]").forEach(b => b.onclick = async () => {
+    if (!(await showConfirm("این مورد حذف بشه؟"))) return;
+    store.notTodos = nots().filter(x => x.id !== b.dataset.rmn); saveStore(); renderNot();
+  });
+}
+
+FA_DAYS.forEach(d => { const o = document.createElement("option"); o.value = d; o.textContent = d; document.getElementById("todoDay").appendChild(o); });
+document.getElementById("todoForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const t = document.getElementById("todoTitle");
+  todos().push({id: genId(), title: t.value.trim(), day: document.getElementById("todoDay").value, done: false});
+  t.value = ""; saveStore(); renderTodo();
+});
+document.getElementById("notForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const t = document.getElementById("notTitle");
+  nots().push({id: genId(), title: t.value.trim(), log: {}});
+  t.value = ""; saveStore(); renderNot();
+});
+function showPage(name) {
+  ["Schedule","Todo","Not"].forEach(p => document.getElementById("page" + p).style.display = p === name ? "" : "none");
+  document.querySelectorAll("#tabBar button").forEach(b => b.classList.toggle("active", b.dataset.page === name));
+  if (name === "Todo") renderTodo();
+  if (name === "Not") renderNot();
+}
+document.querySelectorAll("#tabBar button").forEach(b => b.onclick = () => showPage(b.dataset.page));
+showPage("Schedule");
+
 /* ---------- رندر کلی ---------- */
 function renderAll() {
   renderDayTabs();
   renderClock();
   renderLegend();
   renderDayList();
+  renderTodo();
+  renderNot();
   renderCategorySelect();
   renderCategoryList();
   renderTaskListAll();
